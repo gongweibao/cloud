@@ -115,7 +115,7 @@ func GetChunkRequest(r *http.Request) (*ChunkCmdAttr, error) {
 	}
 
 	//if chunkSize < defaultMinChunkSize || chunkSize > defaultMaxChunkSize {
-	if chunkSize > defaultMaxChunkSize {
+	if chunkSize < 0 || chunkSize > defaultMaxChunkSize {
 		return nil, errors.New("chunksize error")
 	}
 
@@ -248,7 +248,7 @@ func GetChunksMeta(path string, len int64) ([]ChunkMeta, error) {
 			break
 		}
 
-		log.Println(n)
+		//log.Println(n)
 		m := ChunkMeta{}
 		m.Offset = offset
 		sum := md5.Sum(data[:n])
@@ -275,7 +275,7 @@ func (p *ChunkMetaCmdAttr) GetRequestUrl(urlPath string) string {
 
 	//return urlPath + "/api/v1/chunks?" + Url.RawQuery, nil
 
-	return fmt.Sprintf("%s/api/v1/chunk?%s", urlPath, parameters.Encode())
+	return fmt.Sprintf("%s/api/v1/chunks?%s", urlPath, parameters.Encode())
 }
 
 type metaSlice []ChunkMeta
@@ -325,7 +325,9 @@ func GetDiffChunksMeta(srcMeta []ChunkMeta, destMeta []ChunkMeta) ([]ChunkMeta, 
 		}
 	}
 
-	diff = append(diff, srcMeta[srcIdx:len(srcMeta)]...)
+	if srcIdx < len(srcMeta) {
+		diff = append(diff, srcMeta[srcIdx:len(srcMeta)]...)
+	}
 
-	return nil, nil
+	return diff, nil
 }

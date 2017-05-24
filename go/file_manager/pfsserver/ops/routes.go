@@ -45,7 +45,7 @@ var routes = Routes{
 	},
 	Route{
 		"GetChunksData",
-		"Get",
+		"GET",
 		"/api/v1/storage/chunks",
 		GetChunksHandler,
 	},

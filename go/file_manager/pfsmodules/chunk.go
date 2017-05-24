@@ -40,9 +40,9 @@ type ChunkCmd struct {
 	resp    *Chunk
 }
 
-func FromArgs(path string, offset int64, chunkSize int64) *ChunkCmdAttr {
+func FromArgs(method string, path string, offset int64, chunkSize int64) *ChunkCmdAttr {
 	return &ChunkCmdAttr{
-		Method:    "getchunkdata",
+		Method:    method,
 		Path:      path,
 		Offset:    offset,
 		ChunkSize: chunkSize,
@@ -196,7 +196,7 @@ func WriteStreamChunkData(path string, offset int64, len int64, w io.Writer) err
 	writer.SetBoundary(pfscommon.MultiPartBoundary)
 
 	fileName := GetFileNameParam(path, offset, len)
-	log.Printf("%s\n", fileName)
+	log.Printf("fileName:%s\n", fileName)
 	part, err := writer.CreateFormFile("chunk", fileName)
 	if err != nil {
 		return err

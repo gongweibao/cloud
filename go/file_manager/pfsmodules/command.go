@@ -41,7 +41,7 @@ const (
 )
 
 const (
-	defaultMaxCreateFileSize = int64(4 * 1024 * 1024 * 1024 * 1024)
+	defaultMaxCreateFileSize = int64(4 * 1024 * 1024 * 1024)
 )
 
 type Command interface {

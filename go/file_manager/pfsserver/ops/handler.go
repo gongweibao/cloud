@@ -148,6 +148,7 @@ func GetChunksHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	*/
+	log.Printf("GetChunksHandler\n")
 	method := r.URL.Query().Get("method")
 	log.Println(r.URL.String())
 	resp := pfsmodules.JsonResponse{}
@@ -182,6 +183,7 @@ func GetChunksHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func PostChunksHandler(w http.ResponseWriter, r *http.Request) {
+	log.Printf("PostChunksHandler\n")
 	resp := pfsmodules.JsonResponse{}
 	partReader, err := r.MultipartReader()
 

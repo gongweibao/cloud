@@ -154,7 +154,7 @@ func (s *CmdSubmitter) GetChunkData(port uint32,
 	if err != nil {
 		return err
 	}
-	fmt.Println("chunkquest targetURL: " + targetURL)
+	log.Println("chunkquest targetURL: " + targetURL)
 
 	req, err := http.NewRequest("GET", targetURL, http.NoBody)
 	if err != nil {
@@ -209,7 +209,7 @@ func (s *CmdSubmitter) SubmitChunkMetaRequest(
 	cmd *pfsmod.ChunkMetaCmd) error {
 
 	baseUrl := fmt.Sprintf("%s:%d/", s.config.ActiveConfig.Endpoint, port)
-	log.Println("baseurl:" + baseUrl)
+	//log.Println("baseurl:" + baseUrl)
 	targetURL := cmd.GetCmdAttr().GetRequestUrl(baseUrl)
 	log.Println("chunkmeta request targetURL: " + targetURL)
 
@@ -246,52 +246,49 @@ func (s *CmdSubmitter) SubmitChunkMetaRequest(
 	return nil
 }
 
-func streamingUploadFile(filename string, w *io.PipeWriter, f *os.File, chunkSize int64) {
-	defer f.Close()
-	defer w.Close()
-
-	writer := multipart.NewWriter(w)
-	part, err := writer.CreateFormFile("chunk", filename)
-	if err != nil {
-		panic(err)
-	}
-	_, err = io.CopyN(part, f, chunkSize)
-	if err != nil {
-		panic(err)
-	}
-
-	err = writer.Close()
-	if err != nil {
-		panic(err)
-	}
-}
-
 func newChunkUploadRequest(uri string, src string, dest string, offset int64, chunkSize int64) (*http.Request, error) {
+	log.Printf("offset:%d chunkSize:%d\n", offset, chunkSize)
 	f, err := os.Open(src)
 	if err != nil {
 		return nil, err
 	}
+	defer f.Close()
+
 	if _, err := f.Seek(offset, 0); err != nil {
 		return nil, err
 	}
 
 	fileName := pfsmod.GetFileNameParam(dest, offset, chunkSize)
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	defer writer.Close()
 
-	pipReader, pipWriter := io.Pipe()
-	go streamingUploadFile(fileName, pipWriter, f, chunkSize)
-	return http.NewRequest("POST", uri, pipReader)
+	writer.SetBoundary(pfscommon.MultiPartBoundary)
+
+	part, err := writer.CreateFormFile("chunk", fileName)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = io.CopyN(part, f, chunkSize)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", uri, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	return req, nil
 }
 
 func (s *CmdSubmitter) PostChunkData(port uint32,
 	cmd *pfsmod.ChunkCmdAttr, src string) error {
-	baseUrl := fmt.Sprintf("%s:%d", s.config.ActiveConfig.Endpoint)
-	targetURL, err := cmd.GetRequestUrl(baseUrl, "/api/v1/storage/chunks")
-	if err != nil {
-		return err
-	}
-	fmt.Println("chunkquest targetURL: " + targetURL)
+	targetUrl := fmt.Sprintf("%s:%d/api/v1/storage/chunks", s.config.ActiveConfig.Endpoint, port)
+	log.Println("chunk123 targetURL: " + targetUrl)
 
-	req, err := newChunkUploadRequest(targetURL, src, cmd.Path, cmd.Offset, cmd.ChunkSize)
+	req, err := newChunkUploadRequest(targetUrl, src, cmd.Path, cmd.Offset, cmd.ChunkSize)
 	if err != nil {
 		return err
 	}
@@ -303,8 +300,12 @@ func (s *CmdSubmitter) PostChunkData(port uint32,
 	}
 	defer resp.Body.Close()
 
+	fmt.Println(resp.StatusCode)
+	fmt.Println(resp.Header)
+
 	if resp.Status != HTTPOK {
 		return errors.New("http server returned non-200 status: " + resp.Status)
 	}
+
 	return nil
 }

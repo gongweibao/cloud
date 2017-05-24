@@ -44,7 +44,7 @@ func NewTouchCmd(cmdAttr *CmdAttr, resp *TouchCmdResponse) *TouchCmd {
 func NewTouchCmdAttr(path string, fileSize int64) *CmdAttr {
 	option := Option{
 		Name:  "file-size",
-		Value: fmt.Sprint("%d", fileSize),
+		Value: fmt.Sprintf("%d", fileSize),
 	}
 
 	return &CmdAttr{
@@ -98,7 +98,7 @@ func (p *TouchCmd) Run() error {
 
 			fileSize = inputSize
 			if fileSize < 0 || fileSize > defaultMaxCreateFileSize {
-				return errors.New("too large file size")
+				return errors.New("bad file size")
 			}
 		}
 	}

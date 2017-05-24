@@ -31,12 +31,13 @@ func (p *JsonResponse) SetErr(err string) {
 }
 
 const (
-	FileNotFound          = "no such file or directory"
-	DirectoryNotAFile     = "should be a file not a directory"
-	NotSourportedMethod   = "not surported method"
-	CopyFromLocalToLocal  = "don't support copy local to local"
-	DestShouldBeDirectory = "dest should be a directory"
-	BadChunkSizeArguments = "bad chunksize arguments"
+	FileNotFound                     = "no such file or directory"
+	DirectoryNotAFile                = "should be a file not a directory"
+	NotSourportedMethod              = "not surported method"
+	CopyFromLocalToLocal             = "don't support copy local to local"
+	DestShouldBeDirectory            = "dest should be a directory"
+	BadChunkSizeArguments            = "bad chunksize arguments"
+	OnlySupportUploadOrDownloadFiles = "only support upload or download files, not directories"
 )
 
 const (

@@ -9,10 +9,11 @@ import (
 	"errors"
 	"github.com/cloud/go/file_manager/pfscommon"
 	pfsmod "github.com/cloud/go/file_manager/pfsmodules"
-	log "github.com/golang/glog"
+	//log "github.com/golang/glog"
 	"gopkg.in/yaml.v2"
 	"io"
 	"io/ioutil"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"strconv"
@@ -145,9 +146,9 @@ func (s *CmdSubmitter) SubmitCmdReqeust(
 }
 
 func (s *CmdSubmitter) SubmitChunkRequest(port uint32,
-	cmd *pfsmod.ChunkCmdAttr) error {
+	cmd *pfsmod.ChunkCmdAttr, dest string) error {
 
-	baseUrl := fmt.Sprintf("%s:%d/%s", s.config.ActiveConfig.Endpoint, port)
+	baseUrl := fmt.Sprintf("%s:%d", s.config.ActiveConfig.Endpoint, port)
 	targetURL, err := cmd.GetRequestUrl(baseUrl)
 	if err != nil {
 		return err
@@ -170,29 +171,37 @@ func (s *CmdSubmitter) SubmitChunkRequest(port uint32,
 		return errors.New("http server returned non-200 status: " + resp.Status)
 	}
 
+	//multipart.Writer := multipart.NewWriter
+
 	partReader := multipart.NewReader(resp.Body, pfscommon.MultiPartBoundary)
+	log.Println(partReader)
+	//log.Println(partReader.Form())
 	for {
 		part, error := partReader.NextPart()
 		if error == io.EOF {
 			break
 		}
 
+		//log.Printf("%s\n", part.FileName())
+		//continue
+
 		if part.FormName() == "chunk" {
 			chunkCmdAttr, err := pfsmod.ParseFileNameParam(part.FileName())
 			if err != nil {
-				log.Error("parse filename error")
+				log.Printf("parse filename error:%v\n", err)
 				return err
 			}
 
-			f, err := pfsmod.GetChunkWriter(chunkCmdAttr.Path, chunkCmdAttr.Offset)
+			f, err := pfsmod.GetChunkWriter(dest, chunkCmdAttr.Offset)
 			if err != nil {
+				log.Printf("parse filename error:%v\n", err)
 				return err
 			}
 			defer f.Close()
 
 			writen, err := io.Copy(f, part)
 			if err != nil || writen != int64(chunkCmdAttr.ChunkSize) {
-				log.Error("read " + strconv.FormatInt(writen, 10) + "error:" + err.Error())
+				log.Printf("read " + strconv.FormatInt(writen, 10) + "error:" + err.Error())
 				return err
 			}
 		}
@@ -204,12 +213,13 @@ func (s *CmdSubmitter) SubmitChunkMetaRequest(
 	port uint32,
 	cmd *pfsmod.ChunkMetaCmd) error {
 
-	baseUrl := fmt.Sprintf("%s:%d/%s", s.config.ActiveConfig.Endpoint, port)
+	baseUrl := fmt.Sprintf("%s:%d/", s.config.ActiveConfig.Endpoint, port)
+	log.Println("baseurl:" + baseUrl)
 	targetURL, err := cmd.GetCmdAttr().GetRequestUrl(baseUrl)
 	if err != nil {
 		return err
 	}
-	fmt.Println("chunkmeta request targetURL: " + targetURL)
+	log.Println("chunkmeta request targetURL: " + targetURL)
 
 	req, err := http.NewRequest("GET", targetURL, http.NoBody)
 	if err != nil {
@@ -232,13 +242,14 @@ func (s *CmdSubmitter) SubmitChunkMetaRequest(
 	if err != nil {
 		return err
 	}
-	log.Info("body: %s\n", body)
+	//log.Println("body: %s\n", body)
 
 	cmdResp := cmd.GetResponse()
 	if err := json.Unmarshal(body, cmdResp); err != nil {
 		cmdResp.SetErr(err.Error())
 		return err
 	}
+	log.Println(cmdResp)
 
 	return nil
 }

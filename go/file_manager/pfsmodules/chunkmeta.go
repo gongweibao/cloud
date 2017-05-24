@@ -45,7 +45,7 @@ func (p *ChunkMetaCmdResponse) GetErr() string {
 type ChunkMetaCmdAttr struct {
 	Method    string `json:"method"`
 	Path      string `json:"path"`
-	ChunkSize uint32 `json:"chunksize"`
+	ChunkSize int64  `json:"chunksize"`
 }
 
 type ChunkMetaCmd struct {
@@ -71,6 +71,70 @@ func NewChunkMetaCmd(cmdAttr *ChunkMetaCmdAttr,
 		cmdAttr: cmdAttr,
 		resp:    resp,
 	}
+}
+
+/*
+type ChunkReq struct {
+	Method    string
+	Path      string
+	ChunkSize int64
+	Offset    int64
+}
+*/
+
+func GetChunkRequest(r *http.Request) (*ChunkCmdAttr, error) {
+	method := r.URL.Query().Get("method")
+	path := r.URL.Query().Get("path")
+	chunkStr := r.URL.Query().Get("chunksize")
+	offsetStr := r.URL.Query().Get("offset")
+
+	//resp := ChunkMetaCmdResponse{}
+	if len(method) == 0 || len(path) < 4 {
+		return nil, errors.New("check your params")
+	}
+
+	/*
+		if method != "getchunkmeta" {
+			return nil, errors.New(http.StatusText(http.StatusMethodNotAllowed))
+		}
+	*/
+
+	if len(path) < 4 {
+		return nil, errors.New("path error")
+	}
+
+	chunkSize := int64(DefaultChunkSize)
+	if len(chunkStr) == 0 {
+		chunkSize = DefaultChunkSize
+	} else {
+		inputSize, err := strconv.Atoi(chunkStr)
+		if err != nil {
+			return nil, errors.New("chunksize error")
+		}
+		chunkSize = int64(inputSize)
+	}
+
+	//if chunkSize < defaultMinChunkSize || chunkSize > defaultMaxChunkSize {
+	if chunkSize > defaultMaxChunkSize {
+		return nil, errors.New("chunksize error")
+	}
+
+	offset := int64(0)
+	if len(chunkStr) == 0 {
+	} else {
+		inputSize, err := strconv.ParseInt(offsetStr, 10, 64)
+		if err != nil {
+			return nil, errors.New("offset error")
+		}
+		offset = int64(inputSize)
+	}
+
+	return &ChunkCmdAttr{
+		Method:    method,
+		Path:      path,
+		ChunkSize: chunkSize,
+		Offset:    offset,
+	}, nil
 }
 
 func GetChunkMetaCmd(w http.ResponseWriter, r *http.Request) *ChunkMetaCmd {
@@ -99,7 +163,7 @@ func GetChunkMetaCmd(w http.ResponseWriter, r *http.Request) *ChunkMetaCmd {
 		return nil
 	}
 
-	chunkSize := uint32(DefaultChunkSize)
+	chunkSize := int64(DefaultChunkSize)
 	if len(chunkStr) == 0 {
 	} else {
 		inputSize, err := strconv.Atoi(chunkStr)
@@ -108,7 +172,7 @@ func GetChunkMetaCmd(w http.ResponseWriter, r *http.Request) *ChunkMetaCmd {
 			WriteCmdJsonResponse(w, &resp, http.StatusExpectationFailed)
 			return nil
 		}
-		chunkSize = uint32(inputSize)
+		chunkSize = int64(inputSize)
 	}
 
 	if chunkSize < defaultMinChunkSize || chunkSize > defaultMaxChunkSize {
@@ -120,7 +184,7 @@ func GetChunkMetaCmd(w http.ResponseWriter, r *http.Request) *ChunkMetaCmd {
 	cmdAttr := ChunkMetaCmdAttr{}
 	cmdAttr.Method = method
 	cmdAttr.Path = path
-	cmdAttr.ChunkSize = uint32(chunkSize)
+	cmdAttr.ChunkSize = chunkSize
 
 	log.Println(cmdAttr)
 
@@ -152,7 +216,7 @@ func (p *ChunkMetaCmd) RunAndResponse(w http.ResponseWriter) {
 	return
 }
 
-func GetChunksMeta(path string, len uint32) ([]ChunkMeta, error) {
+func GetChunksMeta(path string, len int64) ([]ChunkMeta, error) {
 	f, err := os.Open(path) // For read access.
 	if err != nil {
 		return nil, err
@@ -207,7 +271,9 @@ func (p *ChunkMetaCmdAttr) GetRequestUrl(urlPath string) (string, error) {
 		return "", err
 	}
 
-	Url.Path += "/api/v1/chunks"
+	//log.Println(Url.Path)
+	//Url.Path = urlPath + "/api/v1/chunks"
+	//Url.Path = "/api/v1/chunks"
 	parameters := url.Values{}
 	parameters.Add("method", p.Method)
 	parameters.Add("path", p.Path)
@@ -216,8 +282,9 @@ func (p *ChunkMetaCmdAttr) GetRequestUrl(urlPath string) (string, error) {
 	parameters.Add("chunksize", str)
 
 	Url.RawQuery = parameters.Encode()
+	log.Println(Url.RawQuery)
 
-	return Url.RawQuery, nil
+	return urlPath + "/api/v1/chunks?" + Url.RawQuery, nil
 }
 
 type metaSlice []ChunkMeta
@@ -227,7 +294,7 @@ func (a metaSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a metaSlice) Less(i, j int) bool { return a[i].Offset < a[j].Offset }
 
 func GetDiffChunksMeta(srcMeta []ChunkMeta, destMeta []ChunkMeta) ([]ChunkMeta, error) {
-	if destMeta == nil || len(srcMeta) == 0 {
+	if destMeta == nil || len(destMeta) == 0 || len(srcMeta) == 0 {
 		return srcMeta, nil
 	}
 

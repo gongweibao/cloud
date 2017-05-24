@@ -138,64 +138,39 @@ func GetChunksMetaHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-/*
-// Streams upload directly from file -> mime/multipart -> pipe -> http-request
-func streamingUploadFile(fileName string, offset int64, len int64, w *io.PipeWriter, file *os.File) error {
-	defer file.Close()
-	defer w.Close()
-	writer := multipart.NewWriter(w)
-	part, err := writer.CreateFormFile("file", fileName)
-	if err != nil {
-		return err
-	}
-	_, err = io.CopyN(part, file, len)
-	if err != nil {
-		return err
-	}
-
-	err = writer.Close()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func getChunkData(path string, offset int64, len int64, w *http.ResponseWriter) error {
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-
-	_, err = file.Seek(offset, 0)
-	if err != nil {
-		return err
-	}
-
-	reader, writer := io.Pipe()
-	fileName := pfsmodules.GetFileNameParam(path, offset, len)
-	log.Printf("filename param %s", fileName)
-
-	go streamingUploadFile(fileName, offset, len, writer, file)
-
-	_, err = http.NewRequest("POST", uri, reader)
-	return err
-}
-*/
-
 func GetChunksHandler(w http.ResponseWriter, r *http.Request) {
-	resp := pfsmodules.JsonResponse{}
-	req, err := pfsmodules.NewChunkCmdAttr(r)
-	if err != nil {
-		resp.SetErr(err.Error())
-		pfsmodules.WriteCmdJsonResponse(w, &resp, 422)
-		return
-	}
-
-	switch req.Method {
-	case "getchunkdata":
-		if err := pfsmodules.WriteStreamChunkData(req.Path, req.Offset, int64(req.ChunkSize), w); err != nil {
+	/*
+		resp := pfsmodules.JsonResponse{}
+		req, err := pfsmodules.NewChunkCmdAttr(r)
+		if err != nil {
 			resp.SetErr(err.Error())
 			pfsmodules.WriteCmdJsonResponse(w, &resp, 422)
+			return
+		}
+	*/
+	method := r.URL.Query().Get("method")
+	log.Println(r.URL.String())
+	resp := pfsmodules.JsonResponse{}
+
+	switch method {
+	case "getchunkdata":
+		req, err := pfsmodules.GetChunkRequest(r)
+		if err != nil {
+			resp.SetErr(err.Error())
+			pfsmodules.WriteCmdJsonResponse(w, &resp, http.StatusBadRequest)
+			return
+		}
+
+		//contentType := fmt.Sprintf("Content-Type: multipart/form-data; boundary=%s",
+		//pfscommon.MultiPartBoundary)
+		//w.Header().Set("Content-Type", contentType)
+		//w.WriteHeader(status)
+
+		if err := pfsmodules.WriteStreamChunkData(req.Path, req.Offset, req.ChunkSize, w); err != nil {
+			/*
+				resp.SetErr(err.Error())
+				pfsmodules.WriteCmdJsonResponse(w, &resp, 422)
+			*/
 			return
 		}
 	default:
@@ -204,9 +179,6 @@ func GetChunksHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	return
-}
-
-func PatchChunksHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func PostChunksHandler(w http.ResponseWriter, r *http.Request) {

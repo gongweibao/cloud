@@ -12,7 +12,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
+	//"strings"
 )
 
 type cpCommand struct {
@@ -20,10 +20,10 @@ type cpCommand struct {
 }
 
 func (*cpCommand) Name() string     { return "cp" }
-func (*cpCommand) Synopsis() string { return "copy files or directories" }
+func (*cpCommand) Synopsis() string { return "uoload or download files" }
 func (*cpCommand) Usage() string {
 	return `cp [-v] <src> <dest>
-	copy files or directories
+	upload or downlod files, does't support directories this version
 	Options:
 	`
 }
@@ -72,7 +72,13 @@ func RunCp(p *pfsmodules.CpCmdAttr) ([]pfsmodules.CpCmdResult, error) {
 		if pfsmodules.IsRemotePath(arg) {
 			if pfsmodules.IsRemotePath(dest) {
 				//remotecp
-				ret, err = RemoteCp(p, arg, dest)
+				//ret, err = RemoteCp(p, arg, dest)
+				m := pfsmodules.CpCmdResult{}
+				m.Err = pfsmodules.OnlySupportUploadOrDownloadFiles
+				m.Src = arg
+				m.Dest = dest
+
+				ret = append(ret, m)
 			} else {
 				//download
 				ret, err = Download(arg, dest)
@@ -98,7 +104,7 @@ func RunCp(p *pfsmodules.CpCmdAttr) ([]pfsmodules.CpCmdResult, error) {
 	return results, nil
 }
 
-func GetRemoteChunksMeta(path string, chunkSize uint32) ([]pfsmodules.ChunkMeta, error) {
+func GetRemoteChunksMeta(path string, chunkSize int64) ([]pfsmodules.ChunkMeta, error) {
 	cmdAttr := pfsmodules.ChunkMetaCmdAttr{
 		Method:    "getchunkmeta",
 		Path:      path,
@@ -110,39 +116,51 @@ func GetRemoteChunksMeta(path string, chunkSize uint32) ([]pfsmodules.ChunkMeta,
 	cmd := pfsmodules.NewChunkMetaCmd(&cmdAttr, &resp)
 	err := s.SubmitChunkMetaRequest(8080, cmd)
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
+		log.Printf("error: %v\n", err)
 		return resp.Metas, err
 	}
 
-	fmt.Printf("remote chunk meta ")
-	fmt.Println(resp)
+	//log.Printf("remote chunk meta ")
+	log.Println(resp)
 	return resp.Metas, err
 }
 
 func DownloadChunks(src string, dest string, diffMeta []pfsmodules.ChunkMeta) error {
 	if len(diffMeta) == 0 {
-		log.Println("src'chunkmeta %s equals dest's chunkmeta %s", src, dest)
+		log.Printf("srcfile:%s and destfile:%s are same\n", src, dest)
 		return nil
 	}
 
 	s := NewCmdSubmitter(UserHomeDir() + "/.paddle/config")
+	/*
+		for _, meta := range diffMeta {
+			cmdAttr := pfsmodules.FromArgs(src, meta.Offset, meta.Len)
+			s.SubmitChunkRequest(8080, cmdAttr, dest)
+		}
+	*/
+
 	for _, meta := range diffMeta {
 		cmdAttr := pfsmodules.FromArgs(src, meta.Offset, meta.Len)
-		s.SubmitChunkRequest(8080, cmdAttr)
+		err := s.SubmitChunkRequest(8080, cmdAttr, dest)
+		if err != nil {
+			log.Printf("download chunk error:%v\n", err)
+			return err
+		}
 	}
 
 	return nil
 }
 
-func DownloadFile(src string, srcFileSize int64, dest string, chunkSize uint32) error {
+func DownloadFile(src string, srcFileSize int64, dest string, chunkSize int64) error {
 	srcMeta, err := GetRemoteChunksMeta(src, chunkSize)
 	if err != nil {
 		return err
 	}
 
 	destMeta, err := pfsmodules.GetChunksMeta(dest, chunkSize)
+	//log.Printf("GetChunkMeta %v\n", dest, err)
 	if err != nil {
-		if err == os.ErrNotExist {
+		if os.IsNotExist(err) {
 			if err := pfsmodules.CreateSizedFile(dest, srcFileSize); err != nil {
 				return err
 			}
@@ -166,12 +184,6 @@ func DownloadFile(src string, srcFileSize int64, dest string, chunkSize uint32) 
 
 func Upload(cpCmdAttr *pfsmodules.CpCmdAttr, src, dest string) ([]pfsmodules.CpCmdResult, error) {
 	return nil, nil
-}
-
-func isRoot(root, path string) bool {
-}
-
-func getPathUnderRoot(root, path string) string {
 }
 
 func Download(src, dest string) ([]pfsmodules.CpCmdResult, error) {
@@ -209,33 +221,24 @@ func Download(src, dest string) ([]pfsmodules.CpCmdResult, error) {
 
 	for _, lsResult := range lsResp.Results {
 		for _, meta := range lsResult.Metas {
-			startsWith := strings.HasPrefix(meta.Path, src)
-			if !startsWith {
-				log.Printf("path:%s not in src:%s", meta.Path, src)
-				return results, err
-			}
-			log.Printf("start with:%v", startsWith)
-
-			if meta.IsDir {
-				dest := "/" + meta.Path[len(src):len(meta.Path)]
-				log.Printf("mkdir %s\n", dest)
-				if err := os.MkdirAll(dest, 0755); err != nil {
-					log.Printf("mkdir %s error:%v\n", dest, err)
-				}
-
-				continue
-			}
-
 			m := pfsmodules.CpCmdResult{}
 			m.Src = meta.Path
 			_, file := filepath.Split(meta.Path)
 			m.Dest = dest + "/" + file
+
+			if meta.IsDir {
+				m.Err = pfsmodules.OnlySupportUploadOrDownloadFiles
+				results = append(results, m)
+				log.Printf("%s is a directory\n", meta.Path)
+				return results, err
+			}
 
 			log.Printf("src_path:%s dest_path:%s\n", m.Src, m.Dest)
 			if err := DownloadFile(m.Src, meta.Size, m.Dest, pfsmodules.DefaultChunkSize); err != nil {
 				//fmt.Printf("%s error:%s\n", result.Path, result.Err)
 				m.Err = err.Error()
 				results = append(results, m)
+				log.Printf("download %s  error:%s\n", meta.Path, m.Err)
 				return results, err
 			}
 

@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/cloud/go/file_manager/pfscommon"
 	"io"
 	"io/ioutil"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -18,7 +20,7 @@ import (
 const (
 	defaultMaxChunkSize = 4 * 1024 * 1024
 	defaultMinChunkSize = 4 * 1024
-	DefaultChunkSize    = 2 * 1024 * 1024 * 1024
+	DefaultChunkSize    = 2 * 1024 * 1024
 )
 
 type Chunk struct {
@@ -116,7 +118,19 @@ func GetChunk(path string, offset int64, len uint32) (*Chunk, error) {
 }
 
 func GetFileNameParam(path string, offset int64, len int64) string {
-	return fmt.Sprintf("filename=%s&offset=%d&chunksize=%d", path, offset, len)
+	parameters := url.Values{}
+	parameters.Add("filename", path)
+
+	str := fmt.Sprint(offset)
+	parameters.Add("offset", str)
+
+	str = fmt.Sprint(len)
+	parameters.Add("chunksize", str)
+
+	//Url.RawQuery = parameters.Encode()
+
+	return parameters.Encode()
+	//return fmt.Sprintf("filename=%s&offset=%d&chunksize=%d", path, offset, len)
 }
 
 // path example:
@@ -125,15 +139,16 @@ func ParseFileNameParam(path string) (*ChunkCmdAttr, error) {
 	attr := ChunkCmdAttr{}
 
 	m, err := url.ParseQuery(path)
+	log.Printf("%v\n", m)
 	if err != nil ||
-		len(m["path"]) == 0 ||
+		len(m["filename"]) == 0 ||
 		len(m["offset"]) == 0 ||
 		len(m["chunksize"]) == 0 {
 		return &attr, errors.New(http.StatusText(http.StatusBadGateway))
 	}
 
 	//var err error
-	attr.Path = m["path"][0]
+	attr.Path = m["filename"][0]
 	attr.Offset, err = strconv.ParseInt(m["offset"][0], 10, 64)
 	if err != nil {
 		return &attr, errors.New("bad arguments offset")
@@ -155,7 +170,7 @@ func (p *ChunkCmdAttr) GetRequestUrl(urlPath string) (string, error) {
 		return "", err
 	}
 
-	Url.Path += "/api/v1/storage/chunks"
+	Url.Path = urlPath + "/api/v1/storage/chunks"
 	parameters := url.Values{}
 	parameters.Add("method", p.Method)
 	parameters.Add("path", p.Path)
@@ -168,7 +183,7 @@ func (p *ChunkCmdAttr) GetRequestUrl(urlPath string) (string, error) {
 
 	Url.RawQuery = parameters.Encode()
 
-	return Url.RawQuery, nil
+	return Url.Path + "?" + Url.RawQuery, nil
 }
 
 //func writeStreamChunkData(path string, offset int64, len int64, w http.ResponseWriter) error {
@@ -187,8 +202,11 @@ func WriteStreamChunkData(path string, offset int64, len int64, w io.Writer) err
 	writer := multipart.NewWriter(w)
 	defer writer.Close()
 
+	writer.SetBoundary(pfscommon.MultiPartBoundary)
+
 	fileName := GetFileNameParam(path, offset, len)
-	part, err := writer.CreateFormFile("file", fileName)
+	log.Printf("%s\n", fileName)
+	part, err := writer.CreateFormFile("chunk", fileName)
 	if err != nil {
 		return err
 	}

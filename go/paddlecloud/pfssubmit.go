@@ -16,6 +16,7 @@ import (
 	"log"
 	"mime/multipart"
 	"net/http"
+	"os"
 	"strconv"
 )
 
@@ -145,11 +146,11 @@ func (s *CmdSubmitter) SubmitCmdReqeust(
 	return cmdResp, nil
 }
 
-func (s *CmdSubmitter) SubmitChunkRequest(port uint32,
+func (s *CmdSubmitter) GetChunkData(port uint32,
 	cmd *pfsmod.ChunkCmdAttr, dest string) error {
 
 	baseUrl := fmt.Sprintf("%s:%d", s.config.ActiveConfig.Endpoint, port)
-	targetURL, err := cmd.GetRequestUrl(baseUrl)
+	targetURL, err := cmd.GetRequestUrl(baseUrl, "/api/v1/storage/chunks")
 	if err != nil {
 		return err
 	}
@@ -171,19 +172,13 @@ func (s *CmdSubmitter) SubmitChunkRequest(port uint32,
 		return errors.New("http server returned non-200 status: " + resp.Status)
 	}
 
-	//multipart.Writer := multipart.NewWriter
-
 	partReader := multipart.NewReader(resp.Body, pfscommon.MultiPartBoundary)
 	log.Println(partReader)
-	//log.Println(partReader.Form())
 	for {
 		part, error := partReader.NextPart()
 		if error == io.EOF {
 			break
 		}
-
-		//log.Printf("%s\n", part.FileName())
-		//continue
 
 		if part.FormName() == "chunk" {
 			chunkCmdAttr, err := pfsmod.ParseFileNameParam(part.FileName())
@@ -215,10 +210,7 @@ func (s *CmdSubmitter) SubmitChunkMetaRequest(
 
 	baseUrl := fmt.Sprintf("%s:%d/", s.config.ActiveConfig.Endpoint, port)
 	log.Println("baseurl:" + baseUrl)
-	targetURL, err := cmd.GetCmdAttr().GetRequestUrl(baseUrl)
-	if err != nil {
-		return err
-	}
+	targetURL := cmd.GetCmdAttr().GetRequestUrl(baseUrl)
 	log.Println("chunkmeta request targetURL: " + targetURL)
 
 	req, err := http.NewRequest("GET", targetURL, http.NoBody)
@@ -254,35 +246,65 @@ func (s *CmdSubmitter) SubmitChunkMetaRequest(
 	return nil
 }
 
-func (s *CmdSubmitter) SubmitChunkData(port uint32, cmd *pfsmod.ChunkCmdAttr) {
-	/*
-		baseUrl := fmt.Sprintf("%s:%d/%s", s.config.ActiveConfig.Endpoint, port)
-		targetURL, err := cmd.GetRequestUrl(baseUrl)
-		if err != nil {
-			return err
-		}
-		fmt.Println("chunkquest targetURL: " + targetURL)
+func streamingUploadFile(filename string, w *io.PipeWriter, f *os.File, chunkSize int64) {
+	defer f.Close()
+	defer w.Close()
 
-		req, err := http.NewRequest("POST", targetURL, http.NoBody)
-		if err != nil {
-			return err
-		}
+	writer := multipart.NewWriter(w)
+	part, err := writer.CreateFormFile("chunk", filename)
+	if err != nil {
+		panic(err)
+	}
+	_, err = io.CopyN(part, f, chunkSize)
+	if err != nil {
+		panic(err)
+	}
 
-		client := s.client
-		resp, err := client.Do(req)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
+	err = writer.Close()
+	if err != nil {
+		panic(err)
+	}
+}
 
-		if resp.Status != HTTPOK {
-			return errors.New("http server returned non-200 status: " + resp.Status)
-		}
+func newChunkUploadRequest(uri string, src string, dest string, offset int64, chunkSize int64) (*http.Request, error) {
+	f, err := os.Open(src)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := f.Seek(offset, 0); err != nil {
+		return nil, err
+	}
 
-		if err := pfsmodules.writeStreamChunkData(req.Path, req.Offset, int64(req.ChunkSize), w); err != nil {
-			resp.SetErr(err.Error())
-			pfsmodules.WriteCmdJsonResponse(w, &resp, 422)
-			return
-		}
-	*/
+	fileName := pfsmod.GetFileNameParam(dest, offset, chunkSize)
+
+	pipReader, pipWriter := io.Pipe()
+	go streamingUploadFile(fileName, pipWriter, f, chunkSize)
+	return http.NewRequest("POST", uri, pipReader)
+}
+
+func (s *CmdSubmitter) PostChunkData(port uint32,
+	cmd *pfsmod.ChunkCmdAttr, src string) error {
+	baseUrl := fmt.Sprintf("%s:%d", s.config.ActiveConfig.Endpoint)
+	targetURL, err := cmd.GetRequestUrl(baseUrl, "/api/v1/storage/chunks")
+	if err != nil {
+		return err
+	}
+	fmt.Println("chunkquest targetURL: " + targetURL)
+
+	req, err := newChunkUploadRequest(targetURL, src, cmd.Path, cmd.Offset, cmd.ChunkSize)
+	if err != nil {
+		return err
+	}
+
+	client := s.client
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.Status != HTTPOK {
+		return errors.New("http server returned non-200 status: " + resp.Status)
+	}
+	return nil
 }

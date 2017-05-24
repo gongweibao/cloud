@@ -264,16 +264,8 @@ func GetChunksMeta(path string, len int64) ([]ChunkMeta, error) {
 	return metas, nil
 }
 
-func (p *ChunkMetaCmdAttr) GetRequestUrl(urlPath string) (string, error) {
-	var Url *url.URL
-	Url, err := url.Parse(urlPath)
-	if err != nil {
-		return "", err
-	}
+func (p *ChunkMetaCmdAttr) GetRequestUrl(urlPath string) string {
 
-	//log.Println(Url.Path)
-	//Url.Path = urlPath + "/api/v1/chunks"
-	//Url.Path = "/api/v1/chunks"
 	parameters := url.Values{}
 	parameters.Add("method", p.Method)
 	parameters.Add("path", p.Path)
@@ -281,10 +273,9 @@ func (p *ChunkMetaCmdAttr) GetRequestUrl(urlPath string) (string, error) {
 	str := fmt.Sprint(p.ChunkSize)
 	parameters.Add("chunksize", str)
 
-	Url.RawQuery = parameters.Encode()
-	log.Println(Url.RawQuery)
+	//return urlPath + "/api/v1/chunks?" + Url.RawQuery, nil
 
-	return urlPath + "/api/v1/chunks?" + Url.RawQuery, nil
+	return fmt.Sprintf("%s/api/v1/chunk?%s", urlPath, parameters.Encode())
 }
 
 type metaSlice []ChunkMeta

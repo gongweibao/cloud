@@ -163,14 +163,7 @@ func ParseFileNameParam(path string) (*ChunkCmdAttr, error) {
 	return &attr, nil
 }
 
-func (p *ChunkCmdAttr) GetRequestUrl(urlPath string) (string, error) {
-	var Url *url.URL
-	Url, err := url.Parse(urlPath)
-	if err != nil {
-		return "", err
-	}
-
-	Url.Path = urlPath + "/api/v1/storage/chunks"
+func (p *ChunkCmdAttr) GetRequestUrl(uri string, path string) (string, error) {
 	parameters := url.Values{}
 	parameters.Add("method", p.Method)
 	parameters.Add("path", p.Path)
@@ -181,9 +174,7 @@ func (p *ChunkCmdAttr) GetRequestUrl(urlPath string) (string, error) {
 	str = fmt.Sprint(p.ChunkSize)
 	parameters.Add("chunksize", str)
 
-	Url.RawQuery = parameters.Encode()
-
-	return Url.Path + "?" + Url.RawQuery, nil
+	return fmt.Sprintf("%s/%s?%s", uri, path, parameters.Encode()), nil
 }
 
 //func writeStreamChunkData(path string, offset int64, len int64, w http.ResponseWriter) error {

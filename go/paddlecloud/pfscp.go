@@ -86,7 +86,7 @@ func RunCp(p *pfsmodules.CpCmdAttr) ([]pfsmodules.CpCmdResult, error) {
 		} else {
 			if pfsmodules.IsRemotePath(dest) {
 				//upload
-				ret, err = Upload(p, arg, dest)
+				ret, err = Upload(arg, dest)
 			} else {
 				//can't do that
 				m := pfsmodules.CpCmdResult{}
@@ -132,16 +132,10 @@ func DownloadChunks(src string, dest string, diffMeta []pfsmodules.ChunkMeta) er
 	}
 
 	s := NewCmdSubmitter(UserHomeDir() + "/.paddle/config")
-	/*
-		for _, meta := range diffMeta {
-			cmdAttr := pfsmodules.FromArgs(src, meta.Offset, meta.Len)
-			s.SubmitChunkRequest(8080, cmdAttr, dest)
-		}
-	*/
 
 	for _, meta := range diffMeta {
 		cmdAttr := pfsmodules.FromArgs(src, meta.Offset, meta.Len)
-		err := s.SubmitChunkRequest(8080, cmdAttr, dest)
+		err := s.GetChunkData(8080, cmdAttr, dest)
 		if err != nil {
 			log.Printf("download chunk error:%v\n", err)
 			return err
@@ -182,7 +176,123 @@ func DownloadFile(src string, srcFileSize int64, dest string, chunkSize int64) e
 	return nil
 }
 
-func Upload(cpCmdAttr *pfsmodules.CpCmdAttr, src, dest string) ([]pfsmodules.CpCmdResult, error) {
+func UploadChunks(src string, dest string, diffMeta []pfsmodules.ChunkMeta) error {
+	if len(diffMeta) == 0 {
+		log.Printf("srcfile:%s and destfile:%s are same\n", src, dest)
+		return nil
+	}
+
+	s := NewCmdSubmitter(UserHomeDir() + "/.paddle/config")
+
+	for _, meta := range diffMeta {
+		cmdAttr := pfsmodules.FromArgs(dest, meta.Offset, meta.Len)
+		err := s.PostChunkData(8080, cmdAttr, src)
+		if err != nil {
+			log.Printf("download chunk error:%v\n", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+func RemoteTouch(cmdAttr *pfsmodules.CmdAttr) (*pfsmodules.TouchCmdResponse, error) {
+	resp := pfsmodules.TouchCmdResponse{}
+	s := NewCmdSubmitter(UserHomeDir() + "/.paddle/config")
+
+	touchCmd := pfsmodules.NewTouchCmd(cmdAttr, &resp)
+	_, err := s.SubmitCmdReqeust("POST", "api/v1/files", 8080, touchCmd)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return &resp, err
+	}
+
+	return &resp, err
+}
+
+func UploadFile(src, dest string, srcFileSize int64) error {
+	touchCmdAttr := pfsmodules.NewTouchCmdAttr(dest, srcFileSize)
+	touchResp, err := RemoteTouch(touchCmdAttr)
+	if err != nil {
+		return err
+	}
+
+	if len(touchResp.Err) > 0 {
+		return errors.New(touchResp.Err)
+	}
+
+	dstMeta, err := GetRemoteChunksMeta(dest, pfsmodules.DefaultChunkSize)
+	if err != nil {
+		return err
+	}
+
+	srcMeta, err := pfsmodules.GetChunksMeta(src, pfsmodules.DefaultChunkSize)
+	if err != nil {
+		return err
+	}
+
+	diffMeta, err := pfsmodules.GetDiffChunksMeta(srcMeta, dstMeta)
+	if err != nil {
+		return err
+	}
+
+	err = UploadChunks(src, dest, diffMeta)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func Upload(src, dest string) ([]pfsmodules.CpCmdResult, error) {
+	cmdAttr := pfsmodules.NewLsCmdAttr(src, true)
+	resp := pfsmodules.LsCmdResponse{}
+
+	lsCmd := pfsmodules.NewLsCmd(cmdAttr, &resp)
+	lsCmd.Run()
+	if len(resp.GetErr()) > 0 {
+		fmt.Printf("%s error:%s\n", src, resp.GetErr())
+		return nil, errors.New(resp.Err)
+	}
+
+	results := make([]pfsmodules.CpCmdResult, 0, 100)
+
+	for _, result := range resp.Results {
+		m := pfsmodules.CpCmdResult{}
+		m.Src = result.Path
+		_, file := filepath.Split(m.Src)
+		m.Dest = dest + "/" + file
+
+		if len(result.Err) > 0 {
+			results = append(results, m)
+			log.Printf("%s is a directory\n", m.Src)
+			return results, errors.New(result.Err)
+		}
+
+		for _, meta := range result.Metas {
+			m.Src = meta.Path
+			_, file := filepath.Split(meta.Path)
+			m.Dest = dest + "/" + file
+
+			if meta.IsDir {
+				m.Err = pfsmodules.OnlySupportUploadOrDownloadFiles
+				results = append(results, m)
+				log.Printf("%s is a directory\n", meta.Path)
+				return results, errors.New(m.Err)
+			}
+
+			log.Printf("src_path:%s dest_path:%s\n", m.Src, m.Dest)
+			if err := UploadFile(m.Src, m.Dest, meta.Size); err != nil {
+				m.Err = err.Error()
+				results = append(results, m)
+				log.Printf("download %s  error:%s\n", meta.Path, m.Err)
+				return results, errors.New(m.Err)
+			}
+
+			results = append(results, m)
+		}
+	}
+
 	return nil, nil
 }
 
@@ -255,7 +365,7 @@ func RemoteCp(cpCmdAttr *pfsmodules.CpCmdAttr, src, dest string) ([]pfsmodules.C
 	s := NewCmdSubmitter(UserHomeDir() + "/.paddle/config")
 
 	remoteCpCmd := pfsmodules.NewRemoteCpCmd(cmdAttr, &resp)
-	_, err := s.SubmitCmdReqeust("POST", "api/v1/files", 8080, remoteCpCmd)
+	_, err := s.SubmitCmdReqeust("POST", "/api/v1/files", 8080, remoteCpCmd)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		return nil, err

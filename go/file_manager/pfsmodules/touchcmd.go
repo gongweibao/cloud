@@ -7,6 +7,7 @@ import (
 	"os"
 	//"path/filepath"
 	"errors"
+	"fmt"
 	"strconv"
 )
 
@@ -37,6 +38,19 @@ func NewTouchCmd(cmdAttr *CmdAttr, resp *TouchCmdResponse) *TouchCmd {
 	return &TouchCmd{
 		cmdAttr: cmdAttr,
 		resp:    resp,
+	}
+}
+
+func NewTouchCmdAttr(path string, fileSize int64) *CmdAttr {
+	option := Option{
+		Name:  "file-size",
+		Value: fmt.Sprint("%d", fileSize),
+	}
+
+	return &CmdAttr{
+		Method:  "touch",
+		Options: []Option{option},
+		Args:    []string{path},
 	}
 }
 

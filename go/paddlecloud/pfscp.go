@@ -121,7 +121,7 @@ func GetRemoteChunksMeta(path string, chunkSize int64) ([]pfsmodules.ChunkMeta, 
 	}
 
 	//log.Printf("remote chunk meta ")
-	log.Println(resp)
+	//log.Println(resp)
 	return resp.Metas, err
 }
 
@@ -185,6 +185,7 @@ func UploadChunks(src string, dest string, diffMeta []pfsmodules.ChunkMeta) erro
 	s := NewCmdSubmitter(UserHomeDir() + "/.paddle/config")
 
 	for _, meta := range diffMeta {
+		log.Printf("diffMeta:%v\n", meta)
 		cmdAttr := pfsmodules.FromArgs("postchunkdata", dest, meta.Offset, meta.Len)
 		err := s.PostChunkData(8080, cmdAttr, src)
 		if err != nil {
@@ -232,6 +233,7 @@ func UploadFile(src, dest string, srcFileSize int64) error {
 	if err != nil {
 		return err
 	}
+	log.Printf("dest %s chunkMeta:%v\n", dest, dstMeta)
 
 	log.Printf("src:%s dest:%s\n", src, dest)
 	srcMeta, err := pfsmodules.GetChunksMeta(src, pfsmodules.DefaultChunkSize)

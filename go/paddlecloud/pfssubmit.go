@@ -241,7 +241,7 @@ func (s *CmdSubmitter) SubmitChunkMetaRequest(
 		cmdResp.SetErr(err.Error())
 		return err
 	}
-	log.Println(cmdResp)
+	//log.Println(cmdResp)
 
 	return nil
 }
@@ -261,9 +261,8 @@ func newChunkUploadRequest(uri string, src string, dest string, offset int64, ch
 	fileName := pfsmod.GetFileNameParam(dest, offset, chunkSize)
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-	defer writer.Close()
-
 	writer.SetBoundary(pfscommon.MultiPartBoundary)
+	//defer writer.Close()
 
 	part, err := writer.CreateFormFile("chunk", fileName)
 	if err != nil {
@@ -274,12 +273,17 @@ func newChunkUploadRequest(uri string, src string, dest string, offset int64, ch
 	if err != nil {
 		return nil, err
 	}
+	err = writer.Close()
+	if err != nil {
+		return nil, err
+	}
 
 	req, err := http.NewRequest("POST", uri, body)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	//log.Println(len(body))
 	return req, nil
 }
 

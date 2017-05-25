@@ -1,4 +1,4 @@
-package main
+package paddlecloud
 
 import (
 	"context"
@@ -12,7 +12,8 @@ import (
 	"github.com/google/subcommands"
 )
 
-type submitCmd struct {
+// SubmitCmd define the subcommand of submitting paddle training jobs
+type SubmitCmd struct {
 	Jobname     string `json:"name"`
 	Jobpackage  string `json:"jobPackage"`
 	Parallelism int    `json:"parallelism"`
@@ -24,18 +25,26 @@ type submitCmd struct {
 	PSMemory    string `json:"psmemory"`
 	Entry       string `json:"entry"`
 	Topology    string `json:"topology"`
+	Datacenter  string `json:"datacenter"`
+	Passes      int    `json:"passes"`
 }
 
-func (*submitCmd) Name() string     { return "submit" }
-func (*submitCmd) Synopsis() string { return "Submit job to PaddlePaddle Cloud." }
-func (*submitCmd) Usage() string {
+// Name is subcommands name
+func (*SubmitCmd) Name() string { return "submit" }
+
+// Synopsis is subcommands synopsis
+func (*SubmitCmd) Synopsis() string { return "Submit job to PaddlePaddle Cloud." }
+
+// Usage is subcommands Usage
+func (*SubmitCmd) Usage() string {
 	return `submit [options] <package path>:
 	Submit job to PaddlePaddle Cloud.
 	Options:
 `
 }
 
-func (p *submitCmd) SetFlags(f *flag.FlagSet) {
+// SetFlags registers subcommands flags
+func (p *SubmitCmd) SetFlags(f *flag.FlagSet) {
 	f.StringVar(&p.Jobname, "jobname", "paddle-cluster-job", "Cluster job name.")
 	f.IntVar(&p.Parallelism, "parallelism", 1, "Number of parrallel trainers. Defaults to 1.")
 	f.IntVar(&p.CPU, "cpu", 1, "CPU resource each trainer will use. Defaults to 1.")
@@ -46,9 +55,11 @@ func (p *submitCmd) SetFlags(f *flag.FlagSet) {
 	f.StringVar(&p.PSMemory, "psmemory", "1Gi", "Parameter server momory resource. Defaults to 1Gi.")
 	f.StringVar(&p.Entry, "entry", "paddle train", "Command of starting trainer process. Defaults to paddle train")
 	f.StringVar(&p.Topology, "topology", "", "Will Be Deprecated .py file contains paddle v1 job configs")
+	f.IntVar(&p.Passes, "passes", 1, "Pass count for training job")
 }
 
-func (p *submitCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
+// Execute submit command
+func (p *SubmitCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
 	if f.NArg() != 1 {
 		f.Usage()
 		return subcommands.ExitFailure
@@ -58,6 +69,7 @@ func (p *submitCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}
 		p.Pservers = p.Parallelism
 	}
 	p.Jobpackage = f.Arg(0)
+	p.Datacenter = config.ActiveConfig.Name
 
 	s := NewSubmitter(p)
 	errS := s.Submit(f.Arg(0))
@@ -70,11 +82,11 @@ func (p *submitCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}
 
 // Submitter submit job to cloud
 type Submitter struct {
-	args *submitCmd
+	args *SubmitCmd
 }
 
 // NewSubmitter returns a submitter object
-func NewSubmitter(cmd *submitCmd) *Submitter {
+func NewSubmitter(cmd *SubmitCmd) *Submitter {
 	s := Submitter{cmd}
 	return &s
 }

@@ -23,6 +23,7 @@ import hashlib
 import kubernetes
 import zipfile
 import cStringIO as StringIO
+import base64
 from wsgiref.util import FileWrapper
 from rest_framework.authtoken.models import Token
 from rest_framework import viewsets, generics, permissions
@@ -65,6 +66,11 @@ class SignupView(account.views.SignupView):
         self.update_profile(form)
         logging.info("creating default user certs...")
         tls.create_user_cert(settings.CA_PATH, form.cleaned_data["email"])
+        # HACK: username is the same as user email
+        # create user's default RBAC permissions
+        logging.info("creating default user namespace and RBAC...")
+        create_user_namespace(form.cleaned_data["email"])
+        create_user_RBAC_permissions(form.cleaned_data["email"])
 
         super(SignupView, self).after_signup(form)
 
@@ -118,18 +124,51 @@ def user_certs_generate(request):
         logging.error(str(e))
     return HttpResponseRedirect(request.META.get('HTTP_REFERER'))
 
-@login_required
-def notebook_view(request):
-    """
-        call kubernetes client to create a Deployment of jupyter notebook,
-        mount user's default volume in the pod, then jump to the notebook webpage.
-    """
-    # NOTICE: username is the same to user's email
-    # NOTICE: escape the username to safe string to create namespaces
-    username = request.user.username
+def create_user_RBAC_permissions(username):
+    namespace = utils.email_escape(username)
+    rbacapi = kubernetes.client.RbacAuthorizationV1beta1Api(utils.get_admin_api_client())
+    body = {
+    "apiVersion": "rbac.authorization.k8s.io/v1beta1",
+    "kind": "RoleBinding",
+    "metadata": {
+        "name": "%s-admin-binding"%namespace,
+        "namespace": namespace
+        },
+    "roleRef": {
+        "apiGroup": "rbac.authorization.k8s.io",
+        "kind": "ClusterRole",
+        "name": "admin"
+        },
+    "subjects": [{
+        "apiGroup": "rbac.authorization.k8s.io",
+        "kind": "User",
+        "name": username
+        }]
+    }
+    rbacapi.create_namespaced_role_binding(namespace, body)
+    # create service account permissions
+    body = {
+    "apiVersion": "rbac.authorization.k8s.io/v1beta1",
+    "kind": "RoleBinding",
+    "metadata": {
+        "name": "%s-sa-view"%namespace,
+        "namespace": namespace
+        },
+    "roleRef": {
+        "apiGroup": "rbac.authorization.k8s.io",
+        "kind": "ClusterRole",
+        "name": "view"
+        },
+    "subjects": [{
+        "kind": "ServiceAccount",
+        "name": "default",
+        "namespace": namespace
+        }]
+    }
+    rbacapi.create_namespaced_role_binding(namespace, body)
 
-    # FIXME: notebook must be started under username's namespace
-    v1api = kubernetes.client.CoreV1Api(utils.get_user_api_client(username))
+def create_user_namespace(username):
+    v1api = kubernetes.client.CoreV1Api(utils.get_admin_api_client())
     namespaces = v1api.list_namespace()
     user_namespace_found = False
     user_namespace = utils.email_escape(username)
@@ -144,6 +183,55 @@ def notebook_view(request):
             "metadata": {
                 "name": user_namespace
             }})
+    #create DataCenter sercret if not exists
+    secrets = v1api.list_namespaced_secret(user_namespace)
+    secret_names = [item.metadata.name for item in secrets.items]
+    for dc, cfg in settings.DATACENTERS.items():
+        # create Kubernetes Secret for ceph admin key
+        if cfg["fstype"] == "cephfs" and cfg["secret"] not in secret_names:
+            with open(cfg["admin_key"], "r") as f:
+                key = f.read()
+                encoded = base64.b64encode(key)
+                v1api.create_namespaced_secret(user_namespace, {
+                    "apiVersion": "v1",
+                    "kind": "Secret",
+                    "metadata": {
+                        "name": cfg["secret"]
+                    },
+                    "data": {
+                        "key": encoded
+                    }})
+    # create docker registry secret
+    registry_secret = settings.JOB_DOCKER_IMAGE.get("registry_secret", None)
+    if registry_secret and registry_secret not in secret_names:
+        docker_config = settings.JOB_DOCKER_IMAGE["docker_config"]
+        encode = base64.b64encode(json.dumps(docker_config))
+        v1api.create_namespaced_secret(user_namespace, {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {
+                "name": registry_secret
+            },
+            "data": {
+                ".dockerconfigjson": encode
+            },
+            "type": "kubernetes.io/dockerconfigjson"
+        })
+    return user_namespace
+
+
+@login_required
+def notebook_view(request):
+    """
+        call kubernetes client to create a Deployment of jupyter notebook,
+        mount user's default volume in the pod, then jump to the notebook webpage.
+    """
+    # NOTICE: username is the same to user's email
+    # NOTICE: escape the username to safe string to create namespaces
+    username = request.user.username
+
+    # FIXME: notebook must be started under username's namespace
+    user_namespace = create_user_namespace(username)
 
     ub = utils.UserNotebook()
     ub.start_all(username, user_namespace)

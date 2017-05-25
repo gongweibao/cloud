@@ -19,12 +19,14 @@ class PaddleJob(object):
                  psmemory,
                  topology,
                  image,
+                 passes,
                  gpu=0,
-                 volumes=[]):
+                 volumes=[],
+                 registry_secret=None):
 
         self._ports_num=1
         self._ports_num_for_sparse=1
-        self._num_gradient_servers=1
+        self._num_gradient_servers=parallelism
 
         self._name = name
         self._job_package = job_package
@@ -38,6 +40,8 @@ class PaddleJob(object):
         self._topology = topology
         self._image = image
         self._volumes = volumes
+        self._registry_secret = registry_secret
+        self._passes = passes
 
     @property
     def pservers(self):
@@ -65,10 +69,15 @@ class PaddleJob(object):
         envs.append({"name":"TOPOLOGY",             "value":self._topology})
         envs.append({"name":"TRAINER_PACKAGE",      "value":self._job_package})
         envs.append({"name":"PADDLE_INIT_PORT",     "value":str(DEFAULT_PADDLE_PORT)})
-        envs.append({"name":"PADDLE_INIT_TRAINER_COUNT",        "value":str(self._parallelism)})
+        envs.append({"name":"PADDLE_INIT_TRAINER_COUNT",        "value":str(self._cpu)})
         envs.append({"name":"PADDLE_INIT_PORTS_NUM",            "value":str(self._ports_num)})
         envs.append({"name":"PADDLE_INIT_PORTS_NUM_FOR_SPARSE", "value":str(self._ports_num_for_sparse)})
         envs.append({"name":"PADDLE_INIT_NUM_GRADIENT_SERVERS", "value":str(self._num_gradient_servers)})
+        envs.append({"name":"PADDLE_INIT_NUM_PASSES",           "value":str(self._passes)})
+        if self._gpu:
+            envs.append({"name":"PADDLE_INIT_USE_GPU", "value":str("1")})
+        else:
+            envs.append({"name":"PADDLE_INIT_USE_GPU", "value":str("0")})
         envs.append({"name":"NAMESPACE", "valueFrom":{
             "fieldRef":{"fieldPath":"metadata.namespace"}}})
         return envs
@@ -88,7 +97,7 @@ class PaddleJob(object):
         return ["paddle_k8s", "start_pserver"]
 
     def _get_trainer_entrypoint(sefl):
-        return ["paddle_k8s", "start_trainer v1"]
+        return ["paddle_k8s", "start_trainer", "v1"]
 
     def _get_trainer_labels(self):
         return {"paddle-job": self._name}
@@ -97,20 +106,20 @@ class PaddleJob(object):
     def _get_trainer_volumes(self):
         volumes = []
         for item in self._volumes:
-            volumes.append(item.volume)
+            volumes.append(item["volume"])
         return volumes
 
     def _get_trainer_volume_mounts(self):
         volume_mounts = []
         for item in self._volumes:
-            volume_mounts.append(item.volume_mount)
+            volume_mounts.append(item["volume_mount"])
         return volume_mounts
 
     def new_trainer_job(self):
         """
         return: Trainer job, it's a Kubernetes Job
         """
-        return {
+        job = {
             "apiVersion": "batch/v1",
             "kind": "Job",
             "metadata": {
@@ -138,11 +147,14 @@ class PaddleJob(object):
                 }
             }
         }
+        if self._registry_secret:
+            job["spec"]["template"]["spec"].update({"imagePullSecrets": [{"name": self._registry_secret}]})
+        return job
     def new_pserver_job(self):
         """
         return: PServer job, it's a Kubernetes ReplicaSet
         """
-        return {
+        rs = {
             "apiVersion": "extensions/v1beta1",
             "kind": "ReplicaSet",
             "metadata":{
@@ -166,3 +178,6 @@ class PaddleJob(object):
                 }
             }
         }
+        if self._registry_secret:
+            rs["spec"]["template"]["spec"].update({"imagePullSecrets": [{"name": self._registry_secret}]})
+        return rs

@@ -1,9 +1,11 @@
-package main
+package paddlecloud
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"runtime"
 
 	"github.com/golang/glog"
@@ -41,20 +43,31 @@ func UserHomeDir() string {
 }
 
 func token() (string, error) {
-	// Authenticate to the cloud endpoint
-	authJSON := map[string]string{}
-	authJSON["username"] = config.ActiveConfig.Username
-	authJSON["password"] = config.ActiveConfig.Password
-	authStr, _ := json.Marshal(authJSON)
-	body, err := postCall(authStr, config.ActiveConfig.Endpoint+"/api-token-auth/", "")
+	tokenbytes, err := ioutil.ReadFile(filepath.Join(UserHomeDir(), ".paddle", "token_cache"))
 	if err != nil {
-		return "", err
+		fmt.Fprintf(os.Stderr, "previous token not found, fetching a new one...")
+		// Authenticate to the cloud endpoint
+		authJSON := map[string]string{}
+		authJSON["username"] = config.ActiveConfig.Username
+		authJSON["password"] = config.ActiveConfig.Password
+		authStr, _ := json.Marshal(authJSON)
+		body, err := postCall(authStr, config.ActiveConfig.Endpoint+"/api-token-auth/", "")
+		if err != nil {
+			return "", err
+		}
+		var respObj interface{}
+		if errJSON := json.Unmarshal(body, &respObj); errJSON != nil {
+			return "", errJSON
+		}
+		tokenStr := respObj.(map[string]interface{})["token"].(string)
+		err = ioutil.WriteFile(filepath.Join(UserHomeDir(), ".paddle", "token_cache"), []byte(tokenStr), 0600)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "write cache token file error: %v", err)
+		}
+		// Ignore write token error, fetch a new one next time
+		return tokenStr, nil
 	}
-	var respObj interface{}
-	if errJSON := json.Unmarshal(body, &respObj); errJSON != nil {
-		return "", errJSON
-	}
-	return respObj.(map[string]interface{})["token"].(string), nil
+	return string(tokenbytes), nil
 }
 
 func parseConfig(configFile string) *submitConfig {
@@ -78,4 +91,4 @@ func parseConfig(configFile string) *submitConfig {
 	return nil
 }
 
-var config = parseConfig(UserHomeDir() + "/.paddle/config")
+var config = parseConfig(filepath.Join(UserHomeDir(), ".paddle", "config"))

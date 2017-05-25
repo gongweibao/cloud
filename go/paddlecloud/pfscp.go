@@ -1,38 +1,35 @@
-package main
+package paddlecloud
 
 import (
 	"context"
-	"flag"
-	//"fmt"
-	//"errors"
 	"errors"
+	"flag"
 	"fmt"
-	"github.com/cloud/go/file_manager/pfsmodules"
+	"github.com/PaddlePaddle/cloud/go/file_manager/pfsmodules"
 	"github.com/google/subcommands"
 	"log"
 	"os"
 	"path/filepath"
-	//"strings"
 )
 
-type cpCommand struct {
+type CpCommand struct {
 	v bool
 }
 
-func (*cpCommand) Name() string     { return "cp" }
-func (*cpCommand) Synopsis() string { return "uoload or download files" }
-func (*cpCommand) Usage() string {
+func (*CpCommand) Name() string     { return "cp" }
+func (*CpCommand) Synopsis() string { return "uoload or download files" }
+func (*CpCommand) Usage() string {
 	return `cp [-v] <src> <dest>
 	upload or downlod files, does't support directories this version
 	Options:
 	`
 }
 
-func (p *cpCommand) SetFlags(f *flag.FlagSet) {
+func (p *CpCommand) SetFlags(f *flag.FlagSet) {
 	f.BoolVar(&p.v, "v", false, "Cause cp to be verbose, showing files after they are copied.")
 }
 
-func (p *cpCommand) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
+func (p *CpCommand) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
 	if f.NArg() < 2 {
 		f.Usage()
 		return subcommands.ExitFailure

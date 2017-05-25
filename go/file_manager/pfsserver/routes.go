@@ -1,7 +1,6 @@
 package pfsserver
 
 import (
-	//"github.com/gorilla/mux"
 	"net/http"
 )
 
@@ -40,7 +39,6 @@ var routes = Routes{
 		"GetChunksMeta",
 		"GET",
 		"/api/v1/chunks",
-		//GetChunksHandler,
 		GetChunksMetaHandler,
 	},
 	Route{

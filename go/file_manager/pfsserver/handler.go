@@ -1,17 +1,10 @@
 package pfsserver
 
 import (
-	//"encoding/json"
-	//"github.com/cloud/go/file_manager/pfscommon"
-	//"fmt"
-	//"github.com/cloud/go/file_manager/pfscommon"
-	"github.com/cloud/go/file_manager/pfsmodules"
+	"github.com/PaddlePaddle/cloud/go/file_manager/pfsmodules"
 	"io"
 	"log"
-	//"mime/multipart"
-	//"mime/multipart"
 	"net/http"
-	//"os"
 	"strconv"
 )
 

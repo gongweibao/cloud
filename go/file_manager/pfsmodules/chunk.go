@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/cloud/go/file_manager/pfscommon"
 	"io"
 	"io/ioutil"
 	"log"
@@ -193,7 +192,7 @@ func WriteStreamChunkData(path string, offset int64, len int64, w io.Writer) err
 	writer := multipart.NewWriter(w)
 	defer writer.Close()
 
-	writer.SetBoundary(pfscommon.MultiPartBoundary)
+	writer.SetBoundary(DefaultMultiPartBoundary)
 
 	fileName := GetFileNameParam(path, offset, len)
 	log.Printf("fileName:%s\n", fileName)

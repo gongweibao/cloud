@@ -1,4 +1,4 @@
-package pfscommon
+package pfsmodules
 
 import (
 	"fmt"

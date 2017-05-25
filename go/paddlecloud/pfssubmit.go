@@ -1,15 +1,12 @@
-package main
+package paddlecloud
 
 import (
 	"bytes"
-	"fmt"
-	//"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"errors"
-	"github.com/cloud/go/file_manager/pfscommon"
-	pfsmod "github.com/cloud/go/file_manager/pfsmodules"
-	//log "github.com/golang/glog"
+	"fmt"
+	pfsmod "github.com/PaddlePaddle/cloud/go/file_manager/pfsmodules"
 	"gopkg.in/yaml.v2"
 	"io"
 	"io/ioutil"
@@ -172,7 +169,7 @@ func (s *CmdSubmitter) GetChunkData(port uint32,
 		return errors.New("http server returned non-200 status: " + resp.Status)
 	}
 
-	partReader := multipart.NewReader(resp.Body, pfscommon.MultiPartBoundary)
+	partReader := multipart.NewReader(resp.Body, pfsmod.DefaultMultiPartBoundary)
 	log.Println(partReader)
 	for {
 		part, error := partReader.NextPart()
@@ -261,8 +258,7 @@ func newChunkUploadRequest(uri string, src string, dest string, offset int64, ch
 	fileName := pfsmod.GetFileNameParam(dest, offset, chunkSize)
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-	writer.SetBoundary(pfscommon.MultiPartBoundary)
-	//defer writer.Close()
+	writer.SetBoundary(pfsmod.DefaultMultiPartBoundary)
 
 	part, err := writer.CreateFormFile("chunk", fileName)
 	if err != nil {

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/cloud/go/file_manager/pfscommon"
 	"io"
 	"io/ioutil"
 	"log"
@@ -38,6 +37,10 @@ const (
 	DestShouldBeDirectory            = "dest should be a directory"
 	BadChunkSizeArguments            = "bad chunksize arguments"
 	OnlySupportUploadOrDownloadFiles = "only support upload or download files, not directories"
+)
+
+const (
+	DefaultMultiPartBoundary = "8d7b0e5709d756e21e971ff4d9ac3b20"
 )
 
 const (
@@ -126,7 +129,7 @@ func WriteCmdJsonResponse(w http.ResponseWriter, r Response, status int) error {
 	log.SetFlags(log.LstdFlags)
 
 	if len(r.GetErr()) != 0 {
-		log.Printf("%s error:%s\n", pfscommon.CallerFileLine(), r.GetErr())
+		log.Printf("%s error:%s\n", CallerFileLine(), r.GetErr())
 	}
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)

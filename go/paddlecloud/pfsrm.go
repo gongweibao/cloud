@@ -1,31 +1,31 @@
-package main
+package paddlecloud
 
 import (
 	"context"
 	"flag"
 	"fmt"
-	pfsmod "github.com/cloud/go/file_manager/pfsmodules"
+	pfsmod "github.com/PaddlePaddle/cloud/go/file_manager/pfsmodules"
 	"github.com/google/subcommands"
 )
 
-type rmCommand struct {
+type RmCommand struct {
 	r bool
 }
 
-func (*rmCommand) Name() string     { return "rm" }
-func (*rmCommand) Synopsis() string { return "Rm files or directories on PaddlePaddle Cloud" }
-func (*rmCommand) Usage() string {
+func (*RmCommand) Name() string     { return "rm" }
+func (*RmCommand) Synopsis() string { return "Rm files or directories on PaddlePaddle Cloud" }
+func (*RmCommand) Usage() string {
 	return `rm [-r] <pfspath>:
 	Rm files or directories on PaddlePaddle Cloud
 	Options:
 `
 }
 
-func (p *rmCommand) SetFlags(f *flag.FlagSet) {
+func (p *RmCommand) SetFlags(f *flag.FlagSet) {
 	f.BoolVar(&p.r, "r", false, "rm pfspath recursively")
 }
 
-func (p *rmCommand) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
+func (p *RmCommand) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
 	if f.NArg() < 1 {
 		f.Usage()
 		return subcommands.ExitFailure

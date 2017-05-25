@@ -5,7 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/PaddlePaddle/cloud/go/file_manager/pfsmodules"
+	"github.com/PaddlePaddle/cloud/go/filemanager/pfsmodules"
 	"github.com/google/subcommands"
 	"log"
 	"os"

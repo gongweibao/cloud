@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	pfsmod "github.com/PaddlePaddle/cloud/go/file_manager/pfsmodules"
+	pfsmod "github.com/PaddlePaddle/cloud/go/filemanager/pfsmodules"
 	"gopkg.in/yaml.v2"
 	"io"
 	"io/ioutil"

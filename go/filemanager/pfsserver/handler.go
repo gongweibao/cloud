@@ -1,7 +1,7 @@
 package pfsserver
 
 import (
-	"github.com/PaddlePaddle/cloud/go/file_manager/pfsmodules"
+	"github.com/PaddlePaddle/cloud/go/filemanager/pfsmodules"
 	"io"
 	"log"
 	"net/http"

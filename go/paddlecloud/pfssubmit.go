@@ -21,7 +21,7 @@ func getConfig(file string) (*submitConfig, error) {
 	buf, err := ioutil.ReadFile(file)
 	config := submitConfig{}
 	if err != nil {
-		fmt.Printf("error loading config file: %s, %v\n", file, err)
+		fmt.Errorf("error loading config file: %s, %v\n", file, err)
 		return nil, err
 	}
 
@@ -36,7 +36,7 @@ func getConfig(file string) (*submitConfig, error) {
 		}
 	}
 
-	fmt.Printf("config: %v\n", config.ActiveConfig)
+	//fmt.Printf("config: %v\n", config.ActiveConfig)
 	return &config, err
 }
 
@@ -101,13 +101,8 @@ func (s *CmdSubmitter) SubmitCmdReqeust(
 		return nil, err
 	}
 
-	//fmt.Println(jsonString[:len(jsonString)])
-	fmt.Println(string(jsonString))
-
-	//targetURL := s.config.ActiveConfig.Endpoint + port + ""
 	targetURL := fmt.Sprintf("%s:%d/%s", s.config.ActiveConfig.Endpoint, port, restPath)
-	//targetURL := "http://localhost:8080"
-	fmt.Println(targetURL)
+	fmt.Printf("target url:%s\n", targetUrl)
 	req, err := http.NewRequest(httpMethod, targetURL, bytes.NewBuffer(jsonString))
 	if err != nil {
 		return nil, err
@@ -122,18 +117,10 @@ func (s *CmdSubmitter) SubmitCmdReqeust(
 	}
 	defer resp.Body.Close()
 
-	/*
-		fmt.Println("response Status:", resp.Status)
-		fmt.Println("response Headers:", resp.Header)
-		body, err := ioutil.ReadAll(resp.Body)
-		fmt.Println("response Body:", string(body))
-		return body, err
-	*/
 	if resp.Status != HTTPOK {
 		return nil, errors.New("http server returned non-200 status: " + resp.Status)
 	}
 	body, err := ioutil.ReadAll(resp.Body)
-	fmt.Printf("%s\n\n", body)
 
 	cmdResp := cmd.GetResponse()
 	if err := json.Unmarshal(body, cmdResp); err != nil {
@@ -151,7 +138,7 @@ func (s *CmdSubmitter) GetChunkData(port uint32,
 	if err != nil {
 		return err
 	}
-	log.Println("chunkquest targetURL: " + targetURL)
+	fmt.Printf("chunkquest targetURL: " + targetURL)
 
 	req, err := http.NewRequest("GET", targetURL, http.NoBody)
 	if err != nil {
@@ -170,7 +157,6 @@ func (s *CmdSubmitter) GetChunkData(port uint32,
 	}
 
 	partReader := multipart.NewReader(resp.Body, pfsmod.DefaultMultiPartBoundary)
-	log.Println(partReader)
 	for {
 		part, error := partReader.NextPart()
 		if error == io.EOF {
@@ -180,20 +166,20 @@ func (s *CmdSubmitter) GetChunkData(port uint32,
 		if part.FormName() == "chunk" {
 			chunkCmdAttr, err := pfsmod.ParseFileNameParam(part.FileName())
 			if err != nil {
-				log.Printf("parse filename error:%v\n", err)
+				fmt.Errorf("parse filename error:%v\n", err)
 				return err
 			}
 
 			f, err := pfsmod.GetChunkWriter(dest, chunkCmdAttr.Offset)
 			if err != nil {
-				log.Printf("parse filename error:%v\n", err)
+				fmt.Errorf("parse filename error:%v\n", err)
 				return err
 			}
 			defer f.Close()
 
 			writen, err := io.Copy(f, part)
 			if err != nil || writen != int64(chunkCmdAttr.ChunkSize) {
-				log.Printf("read " + strconv.FormatInt(writen, 10) + "error:" + err.Error())
+				fmt.Errorf("read " + strconv.FormatInt(writen, 10) + "error:" + err.Error())
 				return err
 			}
 		}
@@ -206,16 +192,14 @@ func (s *CmdSubmitter) SubmitChunkMetaRequest(
 	cmd *pfsmod.ChunkMetaCmd) error {
 
 	baseUrl := fmt.Sprintf("%s:%d/", s.config.ActiveConfig.Endpoint, port)
-	//log.Println("baseurl:" + baseUrl)
 	targetURL := cmd.GetCmdAttr().GetRequestUrl(baseUrl)
-	log.Println("chunkmeta request targetURL: " + targetURL)
+	fmt.Printf("chunkmeta request targetURL: " + targetURL)
 
 	req, err := http.NewRequest("GET", targetURL, http.NoBody)
 	if err != nil {
 		return err
 	}
 
-	//req.Header.Set("Content-Type", "application/json")
 	client := s.client
 	resp, err := client.Do(req)
 	if err != nil {
@@ -231,20 +215,18 @@ func (s *CmdSubmitter) SubmitChunkMetaRequest(
 	if err != nil {
 		return err
 	}
-	//log.Println("body: %s\n", body)
 
 	cmdResp := cmd.GetResponse()
 	if err := json.Unmarshal(body, cmdResp); err != nil {
 		cmdResp.SetErr(err.Error())
 		return err
 	}
-	//log.Println(cmdResp)
 
 	return nil
 }
 
 func newChunkUploadRequest(uri string, src string, dest string, offset int64, chunkSize int64) (*http.Request, error) {
-	log.Printf("offset:%d chunkSize:%d\n", offset, chunkSize)
+	//log.Printf("offset:%d chunkSize:%d\n", offset, chunkSize)
 	f, err := os.Open(src)
 	if err != nil {
 		return nil, err
@@ -279,14 +261,13 @@ func newChunkUploadRequest(uri string, src string, dest string, offset int64, ch
 		return nil, err
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-	//log.Println(len(body))
 	return req, nil
 }
 
 func (s *CmdSubmitter) PostChunkData(port uint32,
 	cmd *pfsmod.ChunkCmdAttr, src string) error {
 	targetUrl := fmt.Sprintf("%s:%d/api/v1/storage/chunks", s.config.ActiveConfig.Endpoint, port)
-	log.Println("chunk123 targetURL: " + targetUrl)
+	fmt.Printf("chunk data target url: " + targetUrl)
 
 	req, err := newChunkUploadRequest(targetUrl, src, cmd.Path, cmd.Offset, cmd.ChunkSize)
 	if err != nil {
@@ -300,8 +281,8 @@ func (s *CmdSubmitter) PostChunkData(port uint32,
 	}
 	defer resp.Body.Close()
 
-	fmt.Println(resp.StatusCode)
-	fmt.Println(resp.Header)
+	//fmt.Println(resp.StatusCode)
+	//fmt.Println(resp.Header)
 
 	if resp.Status != HTTPOK {
 		return errors.New("http server returned non-200 status: " + resp.Status)

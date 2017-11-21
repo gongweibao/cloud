@@ -77,6 +77,19 @@ class FilePublishAPIView(APIView):
         publish_record.save()
         return Response({"url": publish_url})
 
+class K8sView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get(self, request, format=None):
+        username = request.user.username
+        ret  = dict{}
+        ret["k8s_host"] = settings.K8S_HOST
+        ret["k8s_ca"] = os.path.join(settings.CA_PATH)
+        ret["client_crt"] = os.path.join(settings.USER_CERTS_PATH, username, "%s.pem"%username)
+        ret["client_key"] = os.path.join(settings.USER_CERTS_PATH, username, "%s-key.pem"%username)
+
+        return Response(ret)
+
 
 class JobsView(APIView):
     permission_classes = (permissions.IsAuthenticated,)

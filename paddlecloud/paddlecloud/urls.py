@@ -27,6 +27,7 @@ urlpatterns = [
     url(r'^api-token-auth/', views.obtain_auth_token),
     url(r'^api/sample/$', notebook.views.SampleView.as_view()),
 
+    url(r"^api/v1/k8s/", paddlejob.views.K8sView.as_view()),
     url(r"^api/v1/jobs/", paddlejob.views.JobsView.as_view()),
     url(r"^api/v1/pservers/", paddlejob.views.PserversView.as_view()),
     url(r"^api/v1/logs/", paddlejob.views.LogsView.as_view()),

@@ -1,6 +1,8 @@
 package config
 
-import apiv1 "k8s.io/client-go/tools/clientcmd/api/v1"
+import (
+	apiv1 "k8s.io/client-go/tools/clientcmd/api/v1"
+)
 
 func generateClustersSpec(name, server, ca string) []apiv1.NamedCluster {
 	return []apiv1.NamedCluster{
@@ -42,15 +44,19 @@ func generateContextSpec(name, user, namespace string) []apiv1.NamedContext {
 // ClientConfig holds fields to create a custom config.
 type ClientConfig struct {
 	ClusterName    string
-	ServerName     string
 	CurrentContext string
-	CA             string
-	ClientKey      string
-	ClientCrt      string
 	NameSpace      string
 }
 
-func createValidTestConfig(clusterName, server, curContext,
+// K8sConfigReq holds info of request from paddlecloud.
+type K8sConfigReq struct {
+	Host      string `json:k8s_host`
+	CA        string `json:k8s_ca`
+	ClientKey string `json:client_key`
+	ClientCrt string `json:client_crt`
+}
+
+func createValidConfig(clusterName, server, curContext,
 	ca, clientKey, clientCrt string) *apiv1.Config {
 	return &apiv1.Config{
 		Kind:           "Config",
@@ -61,4 +67,37 @@ func createValidTestConfig(clusterName, server, curContext,
 		CurrentContext: curContext,
 		Preferences:    apiv1.Preferences{},
 	}
+}
+
+/*
+func getK8sConfig(uri string, token string) (K8sConfigReq, error) {
+	authHeader := make(map[string]string)
+	authHeader["Authorization"] = token
+
+	str := fmt.Sprintf("get uri with token error uri:%s token:%s\n", uri, token)
+
+	req, err := restclient.MakeRequest(uri, "GET", nil, "", nil, authHeader)
+	if err != nil {
+		log.Errorln(str)
+		return "", err
+	}
+
+	body, err := restclient.GetResponse(req)
+	if err != nil {
+		log.Errorln(str)
+		return "", err
+	}
+
+	log.V(4).Infoln("get token2user resp:" + string(body[:]))
+	var resp K8sConfigReq
+	if err := json.Unmarshal(body, &resp); err != nil {
+		log.Errorln(string(body[:]))
+		return "", err
+	}
+
+	return user, nil
+}
+*/
+
+func saveToFile(filename string) {
 }
